@@ -13,9 +13,13 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    extern crate serde;
+    extern crate serde_json;
     use std::fs::File;
     use std::io::BufReader;
     use std::io::prelude::*;
+    use serde::{Deserialize, Serialize};
+    use serde_json::Result;
 
     #[test]
     fn sketch() {
@@ -34,7 +38,9 @@ mod tests {
             .map(|l| l.unwrap())
             .filter(|line| line.contains("protocol.kitchen"))
             .filter(|line| !line.contains("feedme"))
-            .filter(|line| !line.contains("GET /assets"));
+            .filter(|line| !line.contains("GET /assets"))
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .filter(|json| json["stream"] != "stderr");
             
             // .map(f: F);
         let result: String = filtered.collect();
@@ -42,3 +48,5 @@ mod tests {
         println!("{}", result);
     }
 }
+
+// let p: Person = serde_json::from_str(data)?
