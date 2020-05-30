@@ -40,7 +40,7 @@ mod tests {
 
         let file = File::open("data.sample.log").expect("failed to file");
         let buf_reader = BufReader::new(file);
-        let filtered = buf_reader.lines()
+        let grouped = buf_reader.lines()
             .map(|l| l.unwrap())
             .filter(|line| line.contains("protocol.kitchen"))
             .filter(|line| !line.contains("feedme"))
@@ -56,28 +56,33 @@ mod tests {
                     .iter().enumerate()
                     .map(|(idx, alias)| (alias, cap[idx + 1].to_owned()))
                     .collect();
-
                 for (alias, value) in aliases_and_value {
-                    json[alias] = json!(value);
+                    json[alias] = Value::String(value);
                 }
                 json
             })
             .filter(|json| json["response_code"] == "200") // num would be nice but extracting from regex yields str ofc
-            .fold(HashMap::new(), |acc, json| {
-                let identity: Vec<String> = group_keys.iter().map(|k| json[k].to_string()).collect();
-                let counter = acc.entry(identity).or_insert(0); // ew. 
+            .fold(HashMap::new(), |mut acc, json| {
+                let identity: Vec<String> = group_keys.iter().map(|k| json[k].as_str().unwrap().to_owned()).collect();
+                let counter = acc.entry(identity).or_insert(0);
                 *counter += 1;
                 acc
-            }).iter().map(|(k, v)| {
-                let mut json = json!({});
-                let group_keys = vec!["verb", "path"];
-                // TODO put back the json
-                json
-            })
-            .map(|json| serde_json::to_string(&json).unwrap());
+            });
+        let mut filtered = grouped.iter().map(|(k, v)| {
+            let mut json = json!({});
+            let group_keys = vec!["verb", "path"];
+            for (i, key) in group_keys.iter().enumerate() {
+                json[key] = json!(k[i]);
+            }
+            json["_count"] = json!(v);
+            json
+        }).collect::<Vec<Value>>();
+        
+        filtered.sort_by(|a, b| serde_json::to_string(&b["_count"]).unwrap().cmp(&serde_json::to_string(&a["_count"]).unwrap()));
+
             
             // .map(f: F);
-        let result: String = filtered.collect();
+        let result: String = filtered.iter().map(|json| serde_json::to_string(&json).unwrap()).collect();
         
         println!("{}", result);
     }
