@@ -1,6 +1,57 @@
+// use ast::{Expr, Opcode};
 
 grammar;
 
-pub Bare: String = {
-    r#"[^\s]+|"[^\s]+""# => String::from(<>)
+pub Search = {
+    (<SearchTerm>)+ ("|" Transform)* ("|" Sort)?
+}
+
+SearchTerm = {
+    "*", // let's say that you have to have a searchexpr but it can be "any"
+    <Bare>,
+    <Quoted>,
+    <FieldName>,
+    "!" <Bare>,
+    "!" <Quoted>,
+    "!" <FieldName>,
+}
+
+Bare = {
+    BARE,
 };
+
+Quoted = {
+    r##""[^"]+""##, // FIXME: this is not really a quoted expr!
+}
+
+Regex = {
+    Quoted, // FIXME: cheating temprarily, would like to have / / rather than " " ... but does it matter really?
+}
+
+Transform: Vec<&'input str> = {
+    "where" <a:FieldName> <b:FilterOp> <c:Quoted> => vec![a], // FIXME cheating hard on types
+    "parse" <a:FieldName> "with" <b:Regex> "as" (<FieldName>)+ => vec![a],
+    "count by" <a:FieldName> ("," <FieldName>)+ => vec![a],
+}
+
+Sort = {
+    "sort by" (<FieldName>) ("," <FieldName>)+, // TODO: asc/desc
+}
+
+FilterOp = {
+    "=",
+    "!=",
+    "match",
+}
+
+FieldName = {
+    FIELD_NAME,
+}
+
+
+match {
+    r#"[[:alpha:]_]+(\.[[:alpha:]_]+)"# => FIELD_NAME,
+} else {
+    r#"[[:alpha:]\.-_]+"# => BARE,
+    _
+}

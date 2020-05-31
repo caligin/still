@@ -91,8 +91,42 @@ mod tests {
 
     #[test]
     fn lalrpop() {
-        assert!(search::BareParser::new().parse("ingress").is_ok());
-        assert!(search::BareParser::new().parse("protocol.kitchen").is_ok());
+        assert!(search::SearchParser::new().parse("ingress").is_ok());
+        assert!(search::SearchParser::new().parse("protocol.kitchen").is_ok());
+        assert!(search::SearchParser::new().parse("ingress protocol.kitchen").is_ok());
+        assert!(search::SearchParser::new().parse(r#"ingress protocol.kitchen !feedme !"GET /assets"#).is_ok());
+        // assert!(search::SearchParser::new().parse(r#"
+        // ingress protocol.kitchen !feedme !"GET /assets"
+        // | where stream != "stderr"
+        // | where kubernetes.namespace_name = "protocol-kitchen"
+        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        // | where response_code = "200"
+        // | count by verb, path # multi-count maybe not mvp
+        // | sort by _count"#).is_ok());
+        // assert!(search::SearchParser::new().parse(r#"
+        // ingress protocol.kitchen !feedme !"GET /assets"
+        // | where stream != "stderr"
+        // | where kubernetes.namespace_name = "protocol-kitchen"
+        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        // | where response_code = "200"
+        // | count by verb, path # multi-count maybe not mvp
+        // | sort by _count"#).is_ok());
+        // assert!(search::SearchParser::new().parse(r#"
+        // ingress protocol.kitchen !feedme !"GET /assets"
+        // | where stream != "stderr"
+        // | where kubernetes.namespace_name = "protocol-kitchen"
+        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        // | where response_code = "200"
+        // | count by verb, path # multi-count maybe not mvp
+        // | sort by _count"#).is_ok());
+        // assert!(search::SearchParser::new().parse(r#"
+        // ingress protocol.kitchen !feedme !"GET /assets"
+        // | where stream != "stderr"
+        // | where kubernetes.namespace_name = "protocol-kitchen"
+        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        // | where response_code = "200"
+        // | count by verb, path # multi-count maybe not mvp
+        // | sort by _count"#).is_ok());
     }
 }
 
