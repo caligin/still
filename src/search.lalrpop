@@ -1,0 +1,6 @@
+
+grammar;
+
+pub Bare: String = {
+    r#"[^\s]+|"[^\s]+""# => String::from(<>)
+};

@@ -1,6 +1,7 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use] extern crate rocket;
+#[macro_use] extern crate lalrpop_util;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -24,6 +25,8 @@ mod tests {
     use serde_json::json;
     use regex::Regex;
     use std::collections::HashMap;
+    
+    lalrpop_mod!(pub search);
 
     #[test]
     fn sketch() {
@@ -40,7 +43,7 @@ mod tests {
 
         let file = File::open("data.sample.log").expect("failed to file");
         let buf_reader = BufReader::new(file);
-        let grouped = buf_reader.lines()
+        let mut filtered = buf_reader.lines()
             .map(|l| l.unwrap())
             .filter(|line| line.contains("protocol.kitchen"))
             .filter(|line| !line.contains("feedme"))
@@ -67,16 +70,15 @@ mod tests {
                 let counter = acc.entry(identity).or_insert(0);
                 *counter += 1;
                 acc
-            });
-        let mut filtered = grouped.iter().map(|(k, v)| {
-            let mut json = json!({});
-            let group_keys = vec!["verb", "path"];
-            for (i, key) in group_keys.iter().enumerate() {
-                json[key] = json!(k[i]);
-            }
-            json["_count"] = json!(v);
-            json
-        }).collect::<Vec<Value>>();
+            }).iter().map(|(k, v)| {
+                let mut json = json!({});
+                let group_keys = vec!["verb", "path"];
+                for (i, key) in group_keys.iter().enumerate() {
+                    json[key] = json!(k[i]);
+                }
+                json["_count"] = json!(v);
+                json
+            }).collect::<Vec<Value>>();
         
         filtered.sort_by(|a, b| serde_json::to_string(&b["_count"]).unwrap().cmp(&serde_json::to_string(&a["_count"]).unwrap()));
 
@@ -85,6 +87,12 @@ mod tests {
         let result: String = filtered.iter().map(|json| serde_json::to_string(&json).unwrap()).collect();
         
         println!("{}", result);
+    }
+
+    #[test]
+    fn lalrpop() {
+        assert!(search::BareParser::new().parse("ingress").is_ok());
+        assert!(search::BareParser::new().parse("protocol.kitchen").is_ok());
     }
 }
 
