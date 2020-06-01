@@ -95,36 +95,25 @@ mod tests {
         assert!(search::SearchParser::new().parse("protocol.kitchen").is_ok());
         assert!(search::SearchParser::new().parse("ingress protocol.kitchen").is_ok());
         assert!(search::SearchParser::new().parse(r#"ingress protocol.kitchen !feedme !"GET /assets""#).is_ok());
-        println!("{}", search::SearchParser::new().parse(r#"
-        ingress protocol.kitchen !feedme !"GET /assets"
-        | where stream != "stderr"#).unwrap_err());
+        // println!("{}", search::SearchParser::new().parse(r#"
+        // ingress protocol.kitchen !feedme !"GET /assets"
+        // | where stream != "stderr"
+        // | where kubernetes.namespace_name = "protocol-kitchen"
+        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        // | where response_code = "200"
+        // | count by verb, path
+        // | sort by _count"#).unwrap_err());
         assert!(search::SearchParser::new().parse(r#"
         ingress protocol.kitchen !feedme !"GET /assets"
-        | where stream != "stderr"#).is_ok());
-        // assert!(search::SearchParser::new().parse(r#"
-        // ingress protocol.kitchen !feedme !"GET /assets"
-        // | where stream != "stderr"
-        // | where kubernetes.namespace_name = "protocol-kitchen"
-        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
-        // | where response_code = "200"
-        // | count by verb, path # multi-count maybe not mvp
-        // | sort by _count"#).is_ok());
-        // assert!(search::SearchParser::new().parse(r#"
-        // ingress protocol.kitchen !feedme !"GET /assets"
-        // | where stream != "stderr"
-        // | where kubernetes.namespace_name = "protocol-kitchen"
-        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
-        // | where response_code = "200"
-        // | count by verb, path # multi-count maybe not mvp
-        // | sort by _count"#).is_ok());
-        // assert!(search::SearchParser::new().parse(r#"
-        // ingress protocol.kitchen !feedme !"GET /assets"
-        // | where stream != "stderr"
-        // | where kubernetes.namespace_name = "protocol-kitchen"
-        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
-        // | where response_code = "200"
-        // | count by verb, path # multi-count maybe not mvp
-        // | sort by _count"#).is_ok());
+        | where stream != "stderr""#).is_ok());
+        assert!(search::SearchParser::new().parse(r#"
+        ingress protocol.kitchen !feedme !"GET /assets"
+        | where stream != "stderr"
+        | where kubernetes.namespace_name = "protocol-kitchen"
+        | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        | where response_code = "200"
+        | count by verb, path
+        | sort by _count"#).is_ok());
     }
 }
 
