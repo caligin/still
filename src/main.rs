@@ -20,8 +20,7 @@ mod tests {
     use std::fs::File;
     use std::io::BufReader;
     use std::io::prelude::*;
-    use serde::{Deserialize, Serialize};
-    use serde_json::{Result, Value};
+    use serde_json::{Value};
     use serde_json::json;
     use regex::Regex;
     use std::collections::HashMap;
@@ -41,7 +40,7 @@ mod tests {
 
         let group_keys = vec!["verb", "path"];
 
-        let file = File::open("data.sample.log").expect("failed to file");
+        let file = File::open("mini.sample.log").expect("failed to file");
         let buf_reader = BufReader::new(file);
         let mut filtered = buf_reader.lines()
             .map(|l| l.unwrap())
@@ -82,27 +81,22 @@ mod tests {
         
         filtered.sort_by(|a, b| serde_json::to_string(&b["_count"]).unwrap().cmp(&serde_json::to_string(&a["_count"]).unwrap()));
 
-            
-            // .map(f: F);
-        let result: String = filtered.iter().map(|json| serde_json::to_string(&json).unwrap()).collect();
-        
-        // println!("{}", result);
+        let got = filtered;
+        let expected = vec![
+            json!({"_count":4,"path":"/index.html","verb":"GET"}),
+            json!({"_count":3,"path":"/","verb":"GET"}),
+            json!({"_count":2,"path":"/a-tale-of-two-clams/","verb":"GET"}),
+            json!({"_count":1,"path":"/lazy-loaf-tin-bakes/","verb":"GET"})];
+
+        assert_eq!(expected, got);
     }
 
     #[test]
-    fn lalrpop() {
+    fn lalrpop_sketch() {
         assert!(search::SearchParser::new().parse("ingress").is_ok());
         assert!(search::SearchParser::new().parse("protocol.kitchen").is_ok());
         assert!(search::SearchParser::new().parse("ingress protocol.kitchen").is_ok());
         assert!(search::SearchParser::new().parse(r#"ingress protocol.kitchen !feedme !"GET /assets""#).is_ok());
-        // println!("{}", search::SearchParser::new().parse(r#"
-        // ingress protocol.kitchen !feedme !"GET /assets"
-        // | where stream != "stderr"
-        // | where kubernetes.namespace_name = "protocol-kitchen"
-        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
-        // | where response_code = "200"
-        // | count by verb, path
-        // | sort by _count"#).unwrap_err());
         assert!(search::SearchParser::new().parse(r#"
         ingress protocol.kitchen !feedme !"GET /assets"
         | where stream != "stderr""#).is_ok());
