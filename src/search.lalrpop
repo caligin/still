@@ -1,19 +1,21 @@
-// use ast::{Expr, Opcode};
+use crate::ast::{Search, SearchTerm};
 
 grammar;
 
-pub Search = {
-    (<SearchTerm>)+ ("|" Transform)* ("|" Sort)?
+pub Search: Box<Search<'input>> = {
+    <search_terms:(SearchTerm)+> <transforms:(Transform)*> <sort:(Sort)?> => Box::new((search_terms, transforms, sort))
 }
 
-SearchTerm = {
-    "*", // let's say that you have to have a searchexpr but it can be "any"
+SearchTerm: SearchTerm<'input> = {
+    "*" => SearchTerm::Any(), // let's say that you have to have a searchexpr but it can be "any"
+    <SearchTermValue> => SearchTerm::Include(<>),
+    "!" <SearchTermValue> => SearchTerm::Exclude(<>),
+}
+
+SearchTermValue = {
     <Bare>,
     <Quoted>,
     <FieldName>,
-    "!" <Bare>,
-    "!" <Quoted>,
-    "!" <FieldName>,
 }
 
 Bare = {
@@ -21,21 +23,21 @@ Bare = {
 };
 
 Quoted = {
-    r##""[^"]+""##, // FIXME: this is not really a quoted expr!
+    <QUOTED>, // FIXME: this is not really a quoted expr!
 }
 
 Regex = {
-    r#"/(\\/|[^/])+/"#,
+    <QUOTED>,
 }
 
 Transform: Vec<&'input str> = {
-    r"where" <a:FieldName> <b:FilterOp> <c:Quoted> => vec![a], // FIXME cheating hard on types
-    r"parse" <a:FieldName> r"with" <b:Regex> r"as" <c:FieldName> (r"," <FieldName>)*  => vec![a],
-    r"count by" <a:FieldName> (r"," <FieldName>)* => vec![a],
+    r"\|" r"where" <a:FieldName> <b:FilterOp> <c:Quoted> => vec![a], // FIXME cheating hard on types
+    r"\|" r"parse" <a:FieldName> r"with" <b:Regex> r"as" <c:FieldName> (r"," <FieldName>)*  => vec![a],
+    r"\|" r"count by" <a:FieldName> (r"," <FieldName>)* => vec![a],
 }
 
 Sort = {
-    r"sort by" <FieldName> (r"," <FieldName>)*, // TODO: asc/desc
+    r"\|" r"sort by" <FieldName> (r"," <FieldName>)*, // TODO: asc/desc
 }
 
 FilterOp = {
@@ -49,20 +51,24 @@ FieldName = {
 }
 
 
-match {
-    r"where", // TODO: AAAAAAAAAWWWW I NEED ALL THE BAREWORD TOKENS IN HERE NOWWWWW /cry
+match { // FIXME: is there a better way of doing this??? mostly caused by the overlap between fieldname and bare searchterm
+    r#"""# ,
+    r"where",
     r"!=",
     r"=",
     r"match",
     r"parse",
     r"count by",
+    r"sort by",
     r"with",
     r"as",
     r",",
-    r"|",
+    r"\|",
 } else {
     r#"[[:alpha:]_]+(\.[[:alpha:]_]+)*"# => FIELD_NAME,
+    r#""(\\"|[^"])+""# => QUOTED,
 } else {
     r#"[[:alpha:]\.-_]+"# => BARE,
-    _
+} else {
+    _,
 }

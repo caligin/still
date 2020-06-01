@@ -3,6 +3,8 @@
 #[macro_use] extern crate rocket;
 #[macro_use] extern crate lalrpop_util;
 
+mod ast;
+
 #[get("/")]
 fn index() -> &'static str {
     "Hello, world!"
@@ -24,6 +26,7 @@ mod tests {
     use serde_json::json;
     use regex::Regex;
     use std::collections::HashMap;
+    use crate::ast::{Search, SearchTerm, Transform, Sort};
     
     lalrpop_mod!(pub search);
 
@@ -33,7 +36,7 @@ mod tests {
         // ingress protocol.kitchen !feedme !"GET /assets"
         // | where stream != "stderr"
         // | where kubernetes.namespace_name = "protocol-kitchen"
-        // | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        // | parse log with "\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})" as verb, path, response_code
         // | where response_code = "200"
         // | count by verb, path # multi-count maybe not mvp
         // | sort by _count
@@ -97,6 +100,9 @@ mod tests {
         assert!(search::SearchParser::new().parse("protocol.kitchen").is_ok());
         assert!(search::SearchParser::new().parse("ingress protocol.kitchen").is_ok());
         assert!(search::SearchParser::new().parse(r#"ingress protocol.kitchen !feedme !"GET /assets""#).is_ok());
+        // println!("{}",search::SearchParser::new().parse(r#"
+        // ingress protocol.kitchen !feedme !"GET /assets"
+        // | where stream != "stderr""#).unwrap_err());
         assert!(search::SearchParser::new().parse(r#"
         ingress protocol.kitchen !feedme !"GET /assets"
         | where stream != "stderr""#).is_ok());
@@ -104,10 +110,37 @@ mod tests {
         ingress protocol.kitchen !feedme !"GET /assets"
         | where stream != "stderr"
         | where kubernetes.namespace_name = "protocol-kitchen"
-        | parse log with /"([^ ]+) ([^ ]+) HTTP\/1.1" ([\d]{3})/ as verb, path, response_code
+        | parse log with "\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})" as verb, path, response_code
         | where response_code = "200"
         | count by verb, path
         | sort by _count"#).is_ok());
     }
+
+    #[test]
+    fn lalrpop_ast_sketch() {
+        let (search_terms, transforms, sort): Search = *search::SearchParser::new().parse(r#"
+        ingress protocol.kitchen !feedme !"GET /assets"
+        | where stream != "stderr"
+        | where kubernetes.namespace_name = "protocol-kitchen"
+        | parse log with "\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})" as verb, path, response_code
+        | where response_code = "200"
+        | count by verb, path
+        | sort by _count"#).unwrap();
+        assert_eq!(vec![
+            SearchTerm::Include("ingress"),
+            SearchTerm::Include("protocol.kitchen"),
+            SearchTerm::Exclude("feedme"),
+            SearchTerm::Exclude(r#""GET /assets""#), // FIXME: needs unquoting but might be better done by the ast analyser rathen than in-parsing (replace changes types from &'input str to String with temp ownership)
+            ], search_terms);
+        assert_eq!(vec![
+            vec!["stream"],
+            vec!["kubernetes.namespace_name"],
+            vec!["log"],
+            vec!["response_code"],
+            vec!["verb"],
+        ], transforms);
+        assert_eq!(Some("_count"), sort);
+    }
+
 }
 
