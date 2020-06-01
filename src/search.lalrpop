@@ -29,19 +29,19 @@ Regex = {
 }
 
 Transform: Vec<&'input str> = {
-    "where" <a:FieldName> <b:FilterOp> <c:Quoted> => vec![a], // FIXME cheating hard on types
-    "parse" <a:FieldName> "with" <b:Regex> "as" (<FieldName>)+ => vec![a],
-    "count by" <a:FieldName> ("," <FieldName>)+ => vec![a],
+    r"where" <a:FieldName> <b:FilterOp> <c:Quoted> => vec![a], // FIXME cheating hard on types
+    r"parse" <a:FieldName> r"with" <b:Regex> r"as" (<FieldName>)+ => vec![a],
+    r"count by" <a:FieldName> (r"," <FieldName>)+ => vec![a],
 }
 
 Sort = {
-    "sort by" (<FieldName>) ("," <FieldName>)+, // TODO: asc/desc
+    r"sort by" (<FieldName>) (r"," <FieldName>)+, // TODO: asc/desc
 }
 
 FilterOp = {
-    "=",
-    "!=",
-    "match",
+    r"=",
+    r"!=",
+    r"match",
 }
 
 FieldName = {
@@ -50,7 +50,10 @@ FieldName = {
 
 
 match {
-    r#"[[:alpha:]_]+(\.[[:alpha:]_]+)"# => FIELD_NAME,
+    r"where", // TODO: AAAAAAAAAWWWW I NEED ALL THE BAREWORD TOKENS IN HERE NOWWWWW /cry
+    r"!=", // hm or maybe doesn't work?
+} else {
+    r#"[[:alpha:]_]+(\.[[:alpha:]_]+)*"# => FIELD_NAME,
 } else {
     r#"[[:alpha:]\.-_]+"# => BARE,
     _
