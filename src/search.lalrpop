@@ -1,4 +1,4 @@
-use crate::ast::{Search, SearchTerm};
+use crate::ast::{Search, SearchTerm, Transform, Aggregation, Sort, Comparison};
 
 grammar;
 
@@ -30,20 +30,33 @@ Regex = {
     <QUOTED>,
 }
 
-Transform: Vec<&'input str> = {
-    r"\|" r"where" <a:FieldName> <b:FilterOp> <c:Quoted> => vec![a], // FIXME cheating hard on types
-    r"\|" r"parse" <a:FieldName> r"with" <b:Regex> r"as" <c:FieldName> (r"," <FieldName>)*  => vec![a],
-    r"\|" r"count by" <a:FieldName> (r"," <FieldName>)* => vec![a],
+Transform: Transform<'input> = {
+    r"\|" r"where" <field:FieldName> <comparison:FilterOp> <value:Quoted> => Transform::Filter{field, comparison, value},
+    r"\|" r"parse" <field:FieldName> r"with" <parser:Regex> r"as" <bindings:FieldList>  => Transform::Parse{field, parser, bindings},
+    r"\|" r"count by" <fields:FieldList> => Transform::Aggregate(Aggregation::Count(fields)),
 }
 
-Sort = {
-    r"\|" r"sort by" <FieldName> (r"," <FieldName>)*, // TODO: asc/desc
+FieldList: Vec<&'input str> = {
+    <fields:(<FieldName> r",")*> <trailing:FieldName?> => match trailing {
+        None => fields,
+        Some(trailing) => {
+            let mut fields = fields;
+            fields.push(trailing);
+            fields
+        }
+    }
 }
 
-FilterOp = {
-    r"=",
-    r"!=",
-    r"match",
+
+
+Sort: Sort<'input> = {
+    r"\|" r"sort by" <FieldList> => Sort::Desc(<>), // TODO: asc/desc
+}
+
+FilterOp: Comparison = {
+    r"=" => Comparison::Eq,
+    r"!=" => Comparison::Ne,
+    r"match" => Comparison::Match,
 }
 
 FieldName = {

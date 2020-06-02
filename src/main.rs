@@ -26,7 +26,7 @@ mod tests {
     use serde_json::json;
     use regex::Regex;
     use std::collections::HashMap;
-    use crate::ast::{Search, SearchTerm, Transform, Sort};
+    use crate::ast::*;
     
     lalrpop_mod!(pub search);
 
@@ -133,13 +133,13 @@ mod tests {
             SearchTerm::Exclude(r#""GET /assets""#), // FIXME: needs unquoting but might be better done by the ast analyser rathen than in-parsing (replace changes types from &'input str to String with temp ownership)
             ], search_terms);
         assert_eq!(vec![
-            vec!["stream"],
-            vec!["kubernetes.namespace_name"],
-            vec!["log"],
-            vec!["response_code"],
-            vec!["verb"],
+            Transform::Filter { field: "stream", comparison: Comparison::Ne, value: r#""stderr""#},
+            Transform::Filter { field: "kubernetes.namespace_name", comparison: Comparison::Eq, value: r#""protocol-kitchen""#},
+            Transform::Parse { field: "log", parser: r#""\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})""#, bindings: vec!["verb", "path", "response_code"]},
+            Transform::Filter { field: "response_code", comparison: Comparison::Eq, value: r#""200""#},
+            Transform::Aggregate(Aggregation::Count(vec!["verb", "path"])),
         ], transforms);
-        assert_eq!(Some("_count"), sort);
+        assert_eq!(Some(Sort::Desc(vec!["_count"])), sort);
     }
 
 }
