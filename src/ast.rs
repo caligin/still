@@ -52,7 +52,7 @@ impl<'input> Debug for SearchTerm<'input> {
 impl<'input> Debug for Transform<'input> {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
         use self::Transform::*;
-        match &*self {
+        match self {
             Aggregate(aggregation) => write!(fmt, "! {:?}", aggregation),
             Filter { field, comparison, value} => write!(fmt, "! where {:?} {:?} {:?}", field, comparison, value),
             Parse { field, parser, bindings} => write!(fmt, "! parse {:?} {:?} {:?}", field, parser, bindings),
@@ -63,7 +63,7 @@ impl<'input> Debug for Transform<'input> {
 impl<'input> Debug for Aggregation<'input> {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
         use self::Aggregation::*;
-        match &*self {
+        match self {
             Count(fields) => write!(fmt, "! count by {:?}", fields),
         }
     }
@@ -72,7 +72,7 @@ impl<'input> Debug for Aggregation<'input> {
 impl<'input> Debug for Sort<'input> {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
         use self::Sort::*;
-        match &*self {
+        match self {
             Asc(field) => write!(fmt, "! sort by {:?} asc", field),
             Desc(field) => write!(fmt, "! sort by {:?}", field),
         }
