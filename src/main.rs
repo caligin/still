@@ -36,7 +36,7 @@ mod tests {
         // ingress protocol.kitchen !feedme !"GET /assets"
         // | where stream != "stderr"
         // | where kubernetes.namespace_name = "protocol-kitchen"
-        // | parse log with "\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})" as verb, path, response_code
+        // | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
         // | where response_code = "200"
         // | count by verb, path # multi-count maybe not mvp
         // | sort by _count
@@ -110,7 +110,7 @@ mod tests {
         ingress protocol.kitchen !feedme !"GET /assets"
         | where stream != "stderr"
         | where kubernetes.namespace_name = "protocol-kitchen"
-        | parse log with "\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})" as verb, path, response_code
+        | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
         | where response_code = "200"
         | count by verb, path
         | sort by _count"#).is_ok());
@@ -122,7 +122,7 @@ mod tests {
         ingress protocol.kitchen !feedme !"GET /assets"
         | where stream != "stderr"
         | where kubernetes.namespace_name = "protocol-kitchen"
-        | parse log with "\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})" as verb, path, response_code
+        | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
         | where response_code = "200"
         | count by verb, path
         | sort by _count"#).unwrap();
@@ -130,13 +130,13 @@ mod tests {
             SearchTerm::Include("ingress"),
             SearchTerm::Include("protocol.kitchen"),
             SearchTerm::Exclude("feedme"),
-            SearchTerm::Exclude(r#""GET /assets""#), // FIXME: needs unquoting but might be better done by the ast analyser rathen than in-parsing (replace changes types from &'input str to String with temp ownership)
+            SearchTerm::Exclude(r#"GET /assets"#), // FIXME: needs unquoting but might be better done by the ast analyser rathen than in-parsing (replace changes types from &'input str to String with temp ownership)
             ], search_terms);
         assert_eq!(vec![
-            Transform::Filter { field: "stream", comparison: Comparison::Ne, value: r#""stderr""#},
-            Transform::Filter { field: "kubernetes.namespace_name", comparison: Comparison::Eq, value: r#""protocol-kitchen""#},
-            Transform::Parse { field: "log", parser: r#""\"([^ ]+) ([^ ]+) HTTP/1.1\" ([\d]{3})""#, bindings: vec!["verb", "path", "response_code"]},
-            Transform::Filter { field: "response_code", comparison: Comparison::Eq, value: r#""200""#},
+            Transform::Filter { field: "stream", comparison: Comparison::Ne, value: r#"stderr"#},
+            Transform::Filter { field: "kubernetes.namespace_name", comparison: Comparison::Eq, value: r#"protocol-kitchen"#},
+            Transform::Parse { field: "log", parser: r#""([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})"#, bindings: vec!["verb", "path", "response_code"]},
+            Transform::Filter { field: "response_code", comparison: Comparison::Eq, value: r#"200"#},
             Transform::Aggregate(Aggregation::Count(vec!["verb", "path"])),
         ], transforms);
         assert_eq!(Some(Sort::Desc(vec!["_count"])), sort);

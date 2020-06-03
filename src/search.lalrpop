@@ -13,31 +13,27 @@ SearchTerm: SearchTerm<'input> = {
 }
 
 SearchTermValue = {
-    <Bare>,
+    <Unquoted>,
     <Quoted>,
-    <FieldName>,
 }
 
-Bare = {
-    BARE,
+Unquoted = {
+    r#"[[:alpha:][0-9]_\-\.]+"#,
 };
 
-Quoted = {
-    <QUOTED>, // FIXME: this is not really a quoted expr!
-}
-
-Regex = {
-    <QUOTED>,
+Quoted: &'input str = {
+    r#""[^"]*""# => &<>[1..<>.len() - 1],
+    r#"'[^']*'"# => &<>[1..<>.len() - 1],
 }
 
 Transform: Transform<'input> = {
-    r"\|" r"where" <field:FieldName> <comparison:FilterOp> <value:Quoted> => Transform::Filter{field, comparison, value},
-    r"\|" r"parse" <field:FieldName> r"with" <parser:Regex> r"as" <bindings:FieldList>  => Transform::Parse{field, parser, bindings},
-    r"\|" r"count by" <fields:FieldList> => Transform::Aggregate(Aggregation::Count(fields)),
+    "|" "where" <field:Unquoted> <comparison:FilterOp> <value:Quoted> => Transform::Filter{field, comparison, value},
+    "|" "parse" <field:Unquoted> "with" <parser:Quoted> "as" <bindings:FieldList>  => Transform::Parse{field, parser, bindings},
+    "|" "count by" <fields:FieldList> => Transform::Aggregate(Aggregation::Count(fields)),
 }
 
 FieldList: Vec<&'input str> = {
-    <fields:(<FieldName> r",")*> <trailing:FieldName?> => match trailing {
+    <fields:(<Unquoted> r",")*> <trailing:Unquoted?> => match trailing {
         None => fields,
         Some(trailing) => {
             let mut fields = fields;
@@ -47,41 +43,12 @@ FieldList: Vec<&'input str> = {
     }
 }
 
-
-
 Sort: Sort<'input> = {
-    r"\|" r"sort by" <FieldList> => Sort::Desc(<>), // TODO: asc/desc
+    "|" "sort by" <FieldList> => Sort::Desc(<>), // TODO: asc/desc
 }
 
 FilterOp: Comparison = {
-    r"=" => Comparison::Eq,
-    r"!=" => Comparison::Ne,
-    r"match" => Comparison::Match,
-}
-
-FieldName = {
-    FIELD_NAME,
-}
-
-
-match { // FIXME: is there a better way of doing this??? mostly caused by the overlap between fieldname and bare searchterm
-    r#"""# ,
-    r"where",
-    r"!=",
-    r"=",
-    r"match",
-    r"parse",
-    r"count by",
-    r"sort by",
-    r"with",
-    r"as",
-    r",",
-    r"\|",
-} else {
-    r#"[[:alpha:]_]+(\.[[:alpha:]_]+)*"# => FIELD_NAME,
-    r#""(\\"|[^"])+""# => QUOTED,
-} else {
-    r#"[[:alpha:]\.-_]+"# => BARE,
-} else {
-    _,
+    "=" => Comparison::Eq,
+    "!=" => Comparison::Ne,
+    "match" => Comparison::Match,
 }
