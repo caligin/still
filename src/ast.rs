@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Error, Formatter};
+
 // pub type Search = (Vec<Box<SearchTerm>>, Vec<Box<Transform>>, Box<Option<Sort>>);
 pub type Search<'input> = (Vec<SearchTerm<'input>>, Vec<Transform<'input>>, Option<Sort<'input>>);
 

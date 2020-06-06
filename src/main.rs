@@ -4,6 +4,7 @@
 #[macro_use] extern crate lalrpop_util;
 
 mod ast;
+mod visitor;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -27,6 +28,7 @@ mod tests {
     use regex::Regex;
     use std::collections::HashMap;
     use crate::ast::*;
+    use crate::visitor::{Visitor, Visitable};
     
     lalrpop_mod!(pub search);
 
@@ -140,6 +142,95 @@ mod tests {
             Transform::Aggregate(Aggregation::Count(vec!["verb", "path"])),
         ], transforms);
         assert_eq!(Some(Sort::Desc(vec!["_count"])), sort);
+    }
+
+
+    struct TestVisitor {
+        include_terms: usize,
+        exclude_terms: usize,
+        any: usize,
+        filters_equal: usize,
+        filters_not_equal: usize,
+        filters_match: usize,
+        parses: usize,
+        // captured_fields: usize,
+        bound_fields: usize,
+        aggregations: usize,
+        count_fields: usize,
+        sort_fields: usize,
+    }
+
+    impl Visitor for TestVisitor {
+        fn visit_search(&mut self, _search: &Search) {}
+        fn visit_search_term(&mut self, search_term: &SearchTerm) {
+            match search_term {
+                SearchTerm::Include(_) => self.include_terms += 1,
+                SearchTerm::Exclude(_) => self.exclude_terms += 1,
+                SearchTerm::Any() => self.any += 1,
+            }
+        }
+        fn visit_transform(&mut self, transform: &Transform) {
+            match transform {
+                Transform::Aggregate(_) => self.aggregations += 1,
+                Transform::Filter {field: _, comparison, value: _} => match comparison {
+                    Comparison::Eq => self.filters_equal += 1,
+                    Comparison::Ne => self.filters_not_equal += 1,
+                    Comparison::Match => self.filters_match += 1,
+                },
+                Transform::Parse {field: _, parser: _, bindings} => {
+                    self.parses += 1;
+                    self.bound_fields += bindings.len();
+                },
+            }
+        }
+        fn visit_aggregation(&mut self, aggregation: &Aggregation) {
+            match aggregation {
+                Aggregation::Count(fields) => self.count_fields += fields.len(),
+            }
+        }
+        fn visit_sort(&mut self, sort: &Sort) {
+            match sort {
+                Sort::Asc(fields) => self.sort_fields += fields.len(),
+                Sort::Desc(fields) => self.sort_fields += fields.len(),
+            }
+        }
+    }
+
+    #[test]
+    fn lalrpop_ast_visitor_sketch() {
+        let search: Search = *search::SearchParser::new().parse(r#"
+        ingress protocol.kitchen !feedme !"GET /assets"
+        | where stream != "stderr"
+        | where kubernetes.namespace_name = "protocol-kitchen"
+        | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
+        | where response_code = "200"
+        | count by verb, path
+        | sort by _count"#).unwrap();
+        let mut test_visitor = TestVisitor {
+            include_terms: 0,
+            exclude_terms: 0,
+            any: 0,
+            filters_equal: 0,
+            filters_not_equal: 0,
+            filters_match: 0,
+            parses: 0,
+            bound_fields: 0,
+            aggregations: 0,
+            count_fields: 0,
+            sort_fields: 0,
+        };
+        search.accept(&mut test_visitor);
+        assert_eq!(2 ,test_visitor.include_terms);
+        assert_eq!(2 ,test_visitor.exclude_terms);
+        assert_eq!(0 ,test_visitor.any);
+        assert_eq!(2 ,test_visitor.filters_equal);
+        assert_eq!(1 ,test_visitor.filters_not_equal);
+        assert_eq!(0 ,test_visitor.filters_match);
+        assert_eq!(1 ,test_visitor.parses);
+        assert_eq!(3 ,test_visitor.bound_fields);
+        assert_eq!(1 ,test_visitor.aggregations);
+        assert_eq!(2 ,test_visitor.count_fields);
+        assert_eq!(1 ,test_visitor.sort_fields);
     }
 
 }
