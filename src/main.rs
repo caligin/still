@@ -160,7 +160,7 @@ mod tests {
         sort_fields: usize,
     }
 
-    impl Visitor for TestVisitor {
+    impl Visitor<'_> for TestVisitor {
         fn visit_search(&mut self, _search: &Search) {}
         fn visit_search_term(&mut self, search_term: &SearchTerm) {
             match search_term {
