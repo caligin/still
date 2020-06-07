@@ -291,6 +291,64 @@ mod tests {
 
         assert_eq!(expected, got);
     }
+    
+    struct SearchBuilder<'closures> {
+    // struct SearchBuilder<'logs> {
+        // search_stage: Vec<Box<dyn Iterator<Item = String> + 'logs>>,
+        search_stage: Vec<Box<dyn FnMut(String) -> Option<String> + 'closures>>,
+    }
+
+    // impl<'logs> SearchBuilder<'logs> {
+    impl<'closures> SearchBuilder<'closures> {
+        fn new() -> SearchBuilder<'closures> {
+            SearchBuilder {
+                search_stage: vec![],
+            }
+        }
+    }
+
+    impl<'ast> Visitor<'ast> for SearchBuilder<'ast> {
+        fn visit_search(&mut self, _search: &Search) {}
+        fn visit_search_term(&mut self, search_term: &'ast SearchTerm<'ast>) {
+            // let _asd: Box<dyn Iterator<Item = String>> = match search_term {
+            match search_term {
+                SearchTerm::Include(term) => {
+                    self.search_stage.push(Box::new(move |line: String| if line.contains(term) { Some(line)} else { None }) as Box<(dyn FnMut(String) -> Option<String> + 'ast)>)
+                },
+                SearchTerm::Exclude(term) => {
+                    self.search_stage.push(Box::new(move |line: String| if !line.contains(term) { Some(line)} else { None }) as Box<(dyn FnMut(String) -> Option<String> + 'ast)>)
+                },
+                SearchTerm::Any() => {},
+            };
+        }
+        fn visit_transform(&mut self, transform: &Transform) {}
+        fn visit_aggregation(&mut self, aggregation: &Aggregation) {}
+        fn visit_sort(&mut self, sort: &Sort) {}
+    }
+
+
+    #[test]
+    fn all_together_sketch() {
+        let search: Search = *search::SearchParser::new().parse(r#"
+        protocol.kitchen !feedme !"GET /assets"
+        | where stream != "stderr"
+        | where kubernetes.namespace_name = "protocol-kitchen"
+        | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
+        | where response_code = "200"
+        | count by verb, path
+        | sort by _count"#).unwrap();
+
+        let file = File::open("mini.sample.log").expect("failed to file");
+        let lines: Box<dyn Iterator<Item=String>> = Box::new(BufReader::new(file).lines().map(|l| l.unwrap()));
+
+        let mut search_builder = SearchBuilder::new();
+        search.accept(&mut search_builder);
+
+        let filtered = search_builder.search_stage.iter_mut().fold(lines, |iter, filter| Box::new(iter.filter(move |line| filter(line.to_string()).is_some())));
+        
+        let got = filtered.collect::<Vec<String>>();
+        assert_eq!(21, got.len());
+    }
 
 
 }
