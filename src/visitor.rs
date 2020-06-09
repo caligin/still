@@ -1,11 +1,11 @@
 use crate::ast::{Search, SearchTerm, Transform, Aggregation, Sort};
 
 pub trait Visitor<'ast> {
-    fn visit_search(&mut self, search: &Search);
+    fn visit_search(&mut self, search: &'ast Search<'ast>);
     fn visit_search_term(&mut self, search_term: &'ast SearchTerm<'ast>);
-    fn visit_transform(&mut self, transform: &Transform);
-    fn visit_aggregation(&mut self, aggregation: &Aggregation);
-    fn visit_sort(&mut self, sort: &Sort);
+    fn visit_transform(&mut self, transform: &'ast Transform<'ast>);
+    fn visit_aggregation(&mut self, aggregation: &'ast Aggregation<'ast>);
+    fn visit_sort(&mut self, sort: &'ast Sort<'ast>);
 }
 
 pub trait Visitable<'ast, V: Visitor<'ast>> {

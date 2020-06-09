@@ -293,24 +293,22 @@ mod tests {
     }
     
     struct SearchBuilder<'closures> {
-    // struct SearchBuilder<'logs> {
-        // search_stage: Vec<Box<dyn Iterator<Item = String> + 'logs>>,
         search_stage: Vec<Box<dyn FnMut(String) -> Option<String> + 'closures>>,
+        transform_stage: Vec<Box<dyn FnMut(Value) -> Option<Value> + 'closures>>,
     }
 
-    // impl<'logs> SearchBuilder<'logs> {
     impl<'closures> SearchBuilder<'closures> {
         fn new() -> SearchBuilder<'closures> {
             SearchBuilder {
                 search_stage: vec![],
+                transform_stage: vec![],
             }
         }
     }
 
     impl<'ast> Visitor<'ast> for SearchBuilder<'ast> {
-        fn visit_search(&mut self, _search: &Search) {}
+        fn visit_search(&mut self, _search: &'ast Search<'ast>) {}
         fn visit_search_term(&mut self, search_term: &'ast SearchTerm<'ast>) {
-            // let _asd: Box<dyn Iterator<Item = String>> = match search_term {
             match search_term {
                 SearchTerm::Include(term) => {
                     self.search_stage.push(Box::new(move |line: String| if line.contains(term) { Some(line)} else { None }) as Box<(dyn FnMut(String) -> Option<String> + 'ast)>)
@@ -321,9 +319,24 @@ mod tests {
                 SearchTerm::Any() => {},
             };
         }
-        fn visit_transform(&mut self, transform: &Transform) {}
-        fn visit_aggregation(&mut self, aggregation: &Aggregation) {}
-        fn visit_sort(&mut self, sort: &Sort) {}
+        fn visit_transform(&mut self, transform: &'ast Transform<'ast>) {
+            match transform {
+                Transform::Filter{ field, comparison, value } => {
+                    self.transform_stage.push(Box::new(move |line: Value| {
+                        let pointer = "/".to_owned() + &field.replace(r".","/");
+                        let comparison_result = match comparison {
+                            Comparison::Eq => line.pointer(&pointer).and_then(Value::as_str) == Some(value),
+                            Comparison::Ne => line.pointer(&pointer).and_then(Value::as_str) != Some(value),
+                            Comparison::Match => line.pointer(&pointer).and_then(Value::as_str).filter(|f| f.contains(value)).is_some(), // FIXME: regex?
+                        };
+                        if comparison_result { Some(line) } else { None }
+                    }))
+                },
+                _ => {}
+            }
+        }
+        fn visit_aggregation(&mut self, aggregation: &'ast Aggregation<'ast>) {}
+        fn visit_sort(&mut self, sort: &'ast Sort<'ast>) {}
     }
 
 
@@ -333,10 +346,10 @@ mod tests {
         protocol.kitchen !feedme !"GET /assets"
         | where stream != "stderr"
         | where kubernetes.namespace_name = "protocol-kitchen"
-        | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
-        | where response_code = "200"
         | count by verb, path
         | sort by _count"#).unwrap();
+        // | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
+        // | where response_code = "200"
 
         let file = File::open("mini.sample.log").expect("failed to file");
         let lines: Box<dyn Iterator<Item=String>> = Box::new(BufReader::new(file).lines().map(|l| l.unwrap()));
@@ -344,12 +357,14 @@ mod tests {
         let mut search_builder = SearchBuilder::new();
         search.accept(&mut search_builder);
 
-        let filtered = search_builder.search_stage.iter_mut().fold(lines, |iter, filter| Box::new(iter.filter(move |line| filter(line.to_string()).is_some())));
+        let filtered: Box<dyn Iterator<Item=String>> = search_builder.search_stage.iter_mut().fold(lines, |iter, filter| Box::new(iter.filter(move |line| filter(line.to_string()).is_some())));
+        let json_parsed: Box<dyn Iterator<Item=Value>> = Box::new(filtered.filter_map(|line| serde_json::from_str(&line).ok()));
+        let transformed = search_builder.transform_stage.iter_mut().fold(json_parsed, |iter, transform| Box::new(iter.filter_map(transform)));
+            
         
-        let got = filtered.collect::<Vec<String>>();
-        assert_eq!(21, got.len());
+        let got = transformed.collect::<Vec<Value>>();
+        assert_eq!(14, got.len());
     }
-
 
 }
 
