@@ -332,10 +332,33 @@ mod tests {
                         if comparison_result { Some(line) } else { None }
                     }))
                 },
-                _ => {}
+                Transform::Parse{ field, parser, bindings } => {
+                    let pointer = "/".to_owned() + &field.replace(r".","/");
+                    let compiled_parser = Regex::new(parser).unwrap(); // TODO: error handling. invalid regex?
+                    self.transform_stage.push(Box::new(move |mut line: Value| {
+                        let cap = compiled_parser.captures(line.pointer(&pointer).and_then(Value::as_str).unwrap()).unwrap(); // TODO: so much error handling
+                        let aliases_and_value: Vec<(&&str, String)> = bindings
+                            .iter().enumerate()
+                            .map(|(idx, alias)| (alias, cap[idx + 1].to_owned()))
+                            .collect();
+                        for (binding, value) in aliases_and_value {
+                            line[binding] = Value::String(value);
+                        }
+                        Some(line)
+                    }))
+    
+                },
+                _ => {} // aggregation is rather handled by own visit method so it's weird that is a case in transform too
             }
         }
-        fn visit_aggregation(&mut self, aggregation: &'ast Aggregation<'ast>) {}
+        fn visit_aggregation(&mut self, aggregation: &'ast Aggregation<'ast>) {
+            // match aggregation {
+            //     Aggregation::Count(fields) => {
+            //         self.transform_stage.push(Box::new(move |line: Value|))
+            //     },
+            //     // no other supported for now
+            // }
+        }
         fn visit_sort(&mut self, sort: &'ast Sort<'ast>) {}
     }
 
@@ -346,10 +369,10 @@ mod tests {
         protocol.kitchen !feedme !"GET /assets"
         | where stream != "stderr"
         | where kubernetes.namespace_name = "protocol-kitchen"
+        | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
+        | where response_code = "200"
         | count by verb, path
         | sort by _count"#).unwrap();
-        // | parse log with '"([^ ]+) ([^ ]+) HTTP/1.1" ([\d]{3})' as verb, path, response_code
-        // | where response_code = "200"
 
         let file = File::open("mini.sample.log").expect("failed to file");
         let lines: Box<dyn Iterator<Item=String>> = Box::new(BufReader::new(file).lines().map(|l| l.unwrap()));
@@ -363,7 +386,7 @@ mod tests {
             
         
         let got = transformed.collect::<Vec<Value>>();
-        assert_eq!(14, got.len());
+        assert_eq!(10, got.len());
     }
 
 }
