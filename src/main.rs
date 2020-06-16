@@ -13,6 +13,7 @@ use serde_json::Value;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use rocket::response::NamedFile;
 use rocket_contrib::json::Json;
 
 lalrpop_mod!(pub search);
@@ -125,7 +126,13 @@ impl<'ast> Visitor<'ast> for SearchBuilder<'ast> {
     fn visit_sort(&mut self, sort: &'ast Sort<'ast>) {}
 }
 
-#[post("/search?<q>")]
+
+#[get("/")]
+fn index() -> NamedFile {
+    NamedFile::open("assets/index.html").unwrap()
+}
+
+#[get("/search?<q>")]
 fn search(q: String) -> Json<Vec<Value>> {
     let search: Search = *search::SearchParser::new().parse(&q).unwrap();
 
@@ -153,7 +160,7 @@ fn search(q: String) -> Json<Vec<Value>> {
 }
 
 fn main() {
-    rocket::ignite().mount("/", routes![search]).launch();
+    rocket::ignite().mount("/", routes![index, search]).launch();
 }
 
 #[cfg(test)]

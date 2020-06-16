@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="The Log Still"
+    />
+    <title>Still</title>
+    <style>
+code {
+    white-space: pre;
+}
+textarea {
+    width: 100%;
+}
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run Still.</noscript>
+    <div>
+        <textarea name="query"></textarea>
+    </div>
+    <button name="search">search</button>
+    <header class="result-count">Run search</header>
+    <ul class="logs">
+    </ul>
+    <script>
+const logsList = document.querySelector("ul.logs");
+const resultsCount = document.querySelector("header.result-count");
+const renderLogs = (logs) => {
+    resultsCount.textContent = `${logs.length} Results`;
+    for(const child of logsList.childNodes) {
+        logsList.removeChild(child);
+    }
+    for(const logEntry of logs) {
+        const newLi = document.createElement("li");
+        const newCode = document.createElement("code");
+        newCode.textContent = JSON.stringify(logEntry, null, 2);
+        newLi.appendChild(newCode);
+        logsList.appendChild(newLi);
+    }
+}
+const searchBox = document.querySelector("textarea[name=query]");
+document.querySelector("button[name=search]").addEventListener("click", () => {
+    const search = searchBox.value;
+    let url = new URL("/search", document.URL);
+    params = {q: search};
+    Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
+    fetch(url)
+        .then(r => r.json())
+        .then(renderLogs);
+});
+    </script>
+  </body>
+</html>
