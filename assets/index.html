@@ -44,7 +44,7 @@ const renderLogs = (logs) => {
     }
 }
 const searchBox = document.querySelector("textarea[name=query]");
-document.querySelector("button[name=search]").addEventListener("click", () => {
+const submitSearch = () => {
     const search = searchBox.value;
     let url = new URL("/search", document.URL);
     params = {q: search};
@@ -52,7 +52,15 @@ document.querySelector("button[name=search]").addEventListener("click", () => {
     fetch(url)
         .then(r => r.json())
         .then(renderLogs);
+};
+searchBox.addEventListener("keyup", (e) => {
+    if (e.keyCode === 13 && e.ctrlKey) {
+        submitSearch();
+        e.preventDefault();
+    }
 });
+document.querySelector("button[name=search]").addEventListener("click", submitSearch);
+searchBox.focus();
     </script>
   </body>
 </html>
