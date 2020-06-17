@@ -32,7 +32,7 @@ const logsList = document.querySelector("ul.logs");
 const resultsCount = document.querySelector("header.result-count");
 const renderLogs = (logs) => {
     resultsCount.textContent = `${logs.length} Results`;
-    for(const child of logsList.childNodes) {
+    for(const child of Array.prototype.slice.call(logsList.childNodes)) {
         logsList.removeChild(child);
     }
     for(const logEntry of logs) {
