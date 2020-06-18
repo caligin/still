@@ -3,7 +3,8 @@ use crate::ast::{Search, SearchTerm, Transform, Aggregation, Sort, Comparison};
 grammar;
 
 pub Search: Box<Search<'input>> = {
-    <search_terms:(SearchTerm)+> <transforms:(Transform)*> <sort:(Sort)?> => Box::new((search_terms, transforms, sort))
+    <search_terms:(SearchTerm)+> <transforms:(Transform)*> <sort:(Sort)?> => Box::new((search_terms, transforms, sort)),
+    () => Box::new((vec![SearchTerm::Any()], vec![], None))
 }
 
 SearchTerm: SearchTerm<'input> = {

@@ -556,4 +556,35 @@ mod tests {
         let got = transformed.collect::<Vec<Value>>();
         assert_eq!(10, got.len());
     }
+    
+    #[test]
+    fn empty_search_yields_everything() {
+        let search: Search = *search::SearchParser::new()
+            .parse(r#" "#)
+            .unwrap();
+
+        let file = File::open("mini.sample.log").expect("failed to file");
+        let lines: Box<dyn Iterator<Item = String>> =
+            Box::new(BufReader::new(file).lines().map(|l| l.unwrap()));
+
+        let mut search_builder = SearchBuilder::new();
+        search.accept(&mut search_builder);
+
+        let filtered: Box<dyn Iterator<Item = String>> = search_builder
+            .search_stage
+            .iter_mut()
+            .fold(lines, |iter, filter| {
+                Box::new(iter.filter(move |line| filter(line.to_string()).is_some()))
+            });
+        let json_parsed: Box<dyn Iterator<Item = Value>> =
+            Box::new(filtered.filter_map(|line| serde_json::from_str(&line).ok()));
+        let transformed = search_builder
+            .transform_stage
+            .iter_mut()
+            .fold(json_parsed, |iter, transform| {
+                Box::new(iter.filter_map(transform))
+            });
+        let got = transformed.collect::<Vec<Value>>();
+        assert_eq!(165, got.len());
+    }
 }
