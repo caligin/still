@@ -1,0 +1,24 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  push:
+    needs: test
+
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Push to Docker Hub
+      uses: docker/build-push-action@v1
+      with:
+        username: caligin
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: caligin/still
+        tag_with_ref: true
+        tag_with_sha: true
+        add_git_labels: true
