@@ -1,14 +1,25 @@
-name: Publish
+name: Test & Publish
 
 on:
   push:
-    branches:
-      - master
+    branches: [ master ]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: select nightly
+      run: rustup override set nightly
+    - name: Run tests
+      run: cargo test --verbose
+
   push:
     needs: test
-
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:
