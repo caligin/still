@@ -9,7 +9,9 @@ extern crate regex;
 extern crate serde;
 extern crate serde_json;
 use regex::Regex;
+use serde_json::json;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -25,8 +27,8 @@ use crate::ast::*;
 use crate::visitor::{Visitable, Visitor};
 
 struct SearchBuilder<'closures> {
-    search_stage: Vec<Box<dyn FnMut(String) -> Option<String> + 'closures>>,
-    transform_stage: Vec<Box<dyn FnMut(Value) -> Option<Value> + 'closures>>,
+    search_stage: Vec<Box<dyn FnMut(Box<dyn Iterator<Item = String> + 'closures>) -> Box<dyn Iterator<Item = String> + 'closures> + 'closures>>,
+    transform_stage: Vec<Box<dyn FnMut(Box<dyn Iterator<Item = Value> + 'closures>) -> Box<dyn Iterator<Item = Value> + 'closures> + 'closures>>,
 }
 
 impl<'closures> SearchBuilder<'closures> {
@@ -42,22 +44,18 @@ impl<'ast> Visitor<'ast> for SearchBuilder<'ast> {
     fn visit_search(&mut self, _search: &'ast Search<'ast>) {}
     fn visit_search_term(&mut self, search_term: &'ast SearchTerm<'ast>) {
         match search_term {
-            SearchTerm::Include(term) => self.search_stage.push(Box::new(move |line: String| {
-                if line.contains(term) {
-                    Some(line)
-                } else {
-                    None
-                }
-            })
-                as Box<(dyn FnMut(String) -> Option<String> + 'ast)>),
-            SearchTerm::Exclude(term) => self.search_stage.push(Box::new(move |line: String| {
-                if !line.contains(term) {
-                    Some(line)
-                } else {
-                    None
-                }
-            })
-                as Box<(dyn FnMut(String) -> Option<String> + 'ast)>),
+            SearchTerm::Include(term) => {
+                self.search_stage.push(Box::new(move |iter| {
+                    let res: Box<dyn Iterator<Item = String>> = Box::new(iter.filter(move |line| line.contains(*term)));
+                    res
+                }))
+            },
+            SearchTerm::Exclude(term) => {
+                self.search_stage.push(Box::new(move |iter| {
+                    let res: Box<dyn Iterator<Item = String>> = Box::new(iter.filter(move |line| !line.contains(*term)));
+                    res
+                }))
+            },
             SearchTerm::Any() => {}
         };
     }
@@ -68,60 +66,78 @@ impl<'ast> Visitor<'ast> for SearchBuilder<'ast> {
                 comparison,
                 value,
             } => {
-                self.transform_stage.push(Box::new(move |line: Value| {
+                self.transform_stage.push(Box::new(move |iter| {
                     let pointer = "/".to_owned() + &field.replace(r".", "/");
-                    let comparison_result = match comparison {
-                        Comparison::Eq => {
-                            line.pointer(&pointer).and_then(Value::as_str) == Some(value)
+                    Box::new(iter.filter(move |line| {
+                        match comparison {
+                            Comparison::Eq => {
+                                line.pointer(&pointer).and_then(Value::as_str) == Some(value)
+                            }
+                            Comparison::Ne => {
+                                line.pointer(&pointer).and_then(Value::as_str) != Some(value)
+                            }
+                            Comparison::Match => line
+                                .pointer(&pointer)
+                                .and_then(Value::as_str)
+                                .filter(|f| f.contains(value))
+                                .is_some(), // FIXME: regex?
                         }
-                        Comparison::Ne => {
-                            line.pointer(&pointer).and_then(Value::as_str) != Some(value)
-                        }
-                        Comparison::Match => line
-                            .pointer(&pointer)
-                            .and_then(Value::as_str)
-                            .filter(|f| f.contains(value))
-                            .is_some(), // FIXME: regex?
-                    };
-                    if comparison_result {
-                        Some(line)
-                    } else {
-                        None
-                    }
-                }))
-            }
+                    }))}))
+            },
             Transform::Parse {
                 field,
                 parser,
                 bindings,
             } => {
-                let pointer = "/".to_owned() + &field.replace(r".", "/");
-                let compiled_parser = Regex::new(parser).unwrap(); // TODO: error handling. invalid regex?
-                self.transform_stage.push(Box::new(move |mut line: Value| {
-                    let cap = compiled_parser
-                        .captures(line.pointer(&pointer).and_then(Value::as_str).unwrap())
-                        .unwrap(); // TODO: so much error handling
-                    let aliases_and_value: Vec<(&&str, String)> = bindings
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, alias)| (alias, cap[idx + 1].to_owned()))
-                        .collect();
-                    for (binding, value) in aliases_and_value {
-                        line[binding] = Value::String(value);
-                    }
-                    Some(line)
+                self.transform_stage.push(Box::new(move |iter| {
+                    Box::new(iter.map(move |mut line| {
+                        let pointer = "/".to_owned() + &(*field).replace(r".", "/");
+                        let compiled_parser = Regex::new(parser).unwrap(); // TODO: error handling. invalid regex?
+                        let cap = compiled_parser
+                            .captures(line.pointer(&pointer).and_then(Value::as_str).unwrap())
+                            .unwrap(); // TODO: so much error handling
+                        let aliases_and_value: Vec<(&&str, String)> = bindings
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, alias)| (alias, cap[idx + 1].to_owned()))
+                            .collect();
+                        for (binding, value) in aliases_and_value {
+                            line[binding] = Value::String(value);
+                        }
+                        line
+                    }))
                 }))
-            }
+            },
             _ => {} // aggregation is rather handled by own visit method so it's weird that is a case in transform too
         }
     }
     fn visit_aggregation(&mut self, aggregation: &'ast Aggregation<'ast>) {
-        // match aggregation {
-        //     Aggregation::Count(fields) => {
-        //         self.transform_stage.push(Box::new(move |line: Value|))
-        //     },
-        //     // no other supported for now
-        // }
+        match aggregation {
+            Aggregation::Count(fields) => {
+                self.transform_stage.push(Box::new(move |iter| {
+                    let new_source = HashMap::new();
+                    Box::new(iter.fold(new_source, |mut acc, json| {
+                        let identity: Vec<String> = fields
+                            .iter()
+                            .map(|k| json[k].as_str().unwrap().to_owned())
+                            .collect();
+                        let counter = acc.entry(identity).or_insert(0);
+                        *counter += 1;
+                        acc
+                    })
+                    .into_iter()
+                    .map(move |(k, v)| {
+                        let mut json = json!({});
+                        for (i, key) in fields.iter().enumerate() {
+                            json[key] = json!(k[i]);
+                        }
+                        json["_count"] = json!(v);
+                        json
+                    }))
+                }))
+            },
+            // no other supported for now
+        }
     }
     fn visit_sort(&mut self, sort: &'ast Sort<'ast>) {}
 }
@@ -145,16 +161,16 @@ fn search(q: String) -> Json<Vec<Value>> {
     let filtered: Box<dyn Iterator<Item = String>> = search_builder
         .search_stage
         .iter_mut()
-        .fold(lines, |iter, filter| {
-            Box::new(iter.filter(move |line| filter(line.to_string()).is_some()))
+        .fold(lines, |iter, iter_transformer| {
+            Box::new(iter_transformer(iter))
         });
     let json_parsed: Box<dyn Iterator<Item = Value>> =
         Box::new(filtered.filter_map(|line| serde_json::from_str(&line).ok()));
     let transformed = search_builder
         .transform_stage
         .iter_mut()
-        .fold(json_parsed, |iter, transform| {
-            Box::new(iter.filter_map(transform))
+        .fold(json_parsed, |iter, iter_transformer| {
+            Box::new(iter_transformer(iter))
         });
     Json(transformed.collect::<Vec<Value>>())
 }
@@ -542,19 +558,19 @@ mod tests {
         let filtered: Box<dyn Iterator<Item = String>> = search_builder
             .search_stage
             .iter_mut()
-            .fold(lines, |iter, filter| {
-                Box::new(iter.filter(move |line| filter(line.to_string()).is_some()))
+            .fold(lines, |iter, iter_transformer| {
+                Box::new(iter_transformer(iter))
             });
-        let json_parsed: Box<dyn Iterator<Item = Value>> =
+            let json_parsed: Box<dyn Iterator<Item = Value>> =
             Box::new(filtered.filter_map(|line| serde_json::from_str(&line).ok()));
         let transformed = search_builder
             .transform_stage
             .iter_mut()
-            .fold(json_parsed, |iter, transform| {
-                Box::new(iter.filter_map(transform))
+            .fold(json_parsed, |iter, iter_transformer| {
+                Box::new(iter_transformer(iter))
             });
         let got = transformed.collect::<Vec<Value>>();
-        assert_eq!(10, got.len());
+        assert_eq!(4, got.len());
     }
     
     #[test]
@@ -573,16 +589,16 @@ mod tests {
         let filtered: Box<dyn Iterator<Item = String>> = search_builder
             .search_stage
             .iter_mut()
-            .fold(lines, |iter, filter| {
-                Box::new(iter.filter(move |line| filter(line.to_string()).is_some()))
+            .fold(lines, |iter, iter_transformer| {
+                Box::new(iter_transformer(iter))
             });
-        let json_parsed: Box<dyn Iterator<Item = Value>> =
+            let json_parsed: Box<dyn Iterator<Item = Value>> =
             Box::new(filtered.filter_map(|line| serde_json::from_str(&line).ok()));
         let transformed = search_builder
             .transform_stage
             .iter_mut()
-            .fold(json_parsed, |iter, transform| {
-                Box::new(iter.filter_map(transform))
+            .fold(json_parsed, |iter, iter_transformer| {
+                Box::new(iter_transformer(iter))
             });
         let got = transformed.collect::<Vec<Value>>();
         assert_eq!(165, got.len());
