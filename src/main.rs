@@ -13,9 +13,13 @@ use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::File;
+use std::fs::read_dir;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::path::Path;
+use rocket::fairing::AdHoc;
 use rocket::response::NamedFile;
+use rocket::State;
 use rocket_contrib::json::Json;
 
 lalrpop_mod!(pub search);
@@ -149,12 +153,20 @@ fn index() -> NamedFile {
 }
 
 #[get("/search?<q>")]
-fn search(q: String) -> Json<Vec<Value>> {
+fn search(q: String, config: State<StillConfig>) -> Json<Vec<Value>> {
     let search: Search = *search::SearchParser::new().parse(&q).unwrap();
 
-    let file = File::open("mini.sample.log").expect("failed to file");
+    let entries = read_dir(config.logs_dir.as_ref())
+        .unwrap()
+        .map(|res| 
+            res.and_then(|e| File::open(e.path()))
+                .map(|f| BufReader::new(f))
+                .map(|b| b.lines())
+                .unwrap())
+        .flatten();
+
     let lines: Box<dyn Iterator<Item = String>> =
-        Box::new(BufReader::new(file).lines().map(|l| l.unwrap()));
+        Box::new(entries.map(|l| l.unwrap()));
 
     let mut search_builder = SearchBuilder::new();
     search.accept(&mut search_builder);
@@ -175,8 +187,18 @@ fn search(q: String) -> Json<Vec<Value>> {
     Json(transformed.collect::<Vec<Value>>())
 }
 
+struct StillConfig {
+    logs_dir: Box<Path>,
+}
+
 fn main() {
-    rocket::ignite().mount("/", routes![index, search]).launch();
+    rocket::ignite()
+        .attach(AdHoc::on_attach("Load Config", |rocket| {
+            let logs_dir = Box::from(Path::new(rocket.config().get_str("logs_dir").unwrap_or(".")));
+            Ok(rocket.manage(StillConfig{ logs_dir }))
+        }))
+        .mount("/", routes![index, search])
+        .launch();
 }
 
 #[cfg(test)]
@@ -193,7 +215,6 @@ mod tests {
     use std::fs::File;
     use std::io::prelude::*;
     use std::io::BufReader;
-    use std::path::Path;
     lalrpop_mod!(pub search);
 
     #[test]
