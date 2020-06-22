@@ -189,9 +189,11 @@ mod tests {
     use serde_json::json;
     use serde_json::Value;
     use std::collections::HashMap;
+    use std::fs::read_dir;
     use std::fs::File;
     use std::io::prelude::*;
     use std::io::BufReader;
+    use std::path::Path;
     lalrpop_mod!(pub search);
 
     #[test]
@@ -206,10 +208,16 @@ mod tests {
 
         let group_keys = vec!["verb", "path"];
 
-        let file = File::open("mini.sample.log").expect("failed to file");
-        let buf_reader = BufReader::new(file);
-        let mut filtered = buf_reader
-            .lines()
+        let entries = read_dir("fixtures")
+            .unwrap()
+            .map(|res| 
+                res.and_then(|e| File::open(e.path()))
+                    .map(|f| BufReader::new(f))
+                    .map(|b| b.lines())
+                    .unwrap())
+            .flatten();
+
+        let mut filtered = entries
             .map(|l| l.unwrap())
             .filter(|line| line.contains("protocol.kitchen"))
             .filter(|line| !line.contains("feedme"))
@@ -461,12 +469,19 @@ mod tests {
     fn sketch_type_breakdown() {
         let group_keys = vec!["verb", "path"];
 
-        let file = File::open("mini.sample.log").expect("failed to file");
-        let buf_reader = BufReader::new(file);
+        let mut entries = read_dir("fixtures")
+            .unwrap()
+            .map(|res| 
+                res.and_then(|e| File::open(e.path()))
+                    .map(|f| BufReader::new(f))
+                    .map(|b| b.lines())
+                    .unwrap())
+            .flatten();
+
 
         let filtered1: &mut dyn Iterator<
             Item = std::result::Result<std::string::String, std::io::Error>,
-        > = &mut buf_reader.lines();
+        > = &mut entries;
         let filtered2: &mut dyn Iterator<Item = String> = &mut filtered1.map(|l| l.unwrap());
         // let filtered3: &mut dyn Iterator<Item = String> = &mut filtered2.filter(|line| line.contains("ingress")); LOL THIS FILTERS TOO MUCH, MISSED IN ORIGINAL TEST!
         let filtered4: &mut dyn Iterator<Item = String> =
@@ -548,9 +563,17 @@ mod tests {
             )
             .unwrap();
 
-        let file = File::open("mini.sample.log").expect("failed to file");
+        let entries = read_dir("fixtures")
+            .unwrap()
+            .map(|res| 
+                res.and_then(|e| File::open(e.path()))
+                    .map(|f| BufReader::new(f))
+                    .map(|b| b.lines())
+                    .unwrap())
+            .flatten();
+
         let lines: Box<dyn Iterator<Item = String>> =
-            Box::new(BufReader::new(file).lines().map(|l| l.unwrap()));
+            Box::new(entries.map(|l| l.unwrap()));
 
         let mut search_builder = SearchBuilder::new();
         search.accept(&mut search_builder);
@@ -579,9 +602,18 @@ mod tests {
             .parse(r#" "#)
             .unwrap();
 
-        let file = File::open("mini.sample.log").expect("failed to file");
+        let entries = read_dir("fixtures")
+            .unwrap()
+            .map(|res| 
+                res.and_then(|e| File::open(e.path()))
+                    .map(|f| BufReader::new(f))
+                    .map(|b| b.lines())
+                    .unwrap())
+            .flatten();
+
         let lines: Box<dyn Iterator<Item = String>> =
-            Box::new(BufReader::new(file).lines().map(|l| l.unwrap()));
+            Box::new(entries.map(|l| l.unwrap()));
+
 
         let mut search_builder = SearchBuilder::new();
         search.accept(&mut search_builder);
