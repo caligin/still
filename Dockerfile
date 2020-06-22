@@ -17,7 +17,6 @@ RUN cargo build --target x86_64-unknown-linux-musl --release
 FROM scratch
 COPY --from=build /app/target/x86_64-unknown-linux-musl/release .
 COPY assets ./assets
-# TODO this eventually disappears
-COPY mini.sample.log ./
+
 USER 1000
 CMD ["./still"]
