@@ -12,6 +12,7 @@ use regex::Regex;
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs::File;
 use std::fs::read_dir;
 use std::io::prelude::*;
@@ -158,13 +159,17 @@ fn search(q: String, config: State<StillConfig>) -> Json<Vec<Value>> {
 
     let entries = read_dir(config.logs_dir.as_ref())
         .unwrap()
-        .map(|res| 
-            res.and_then(|e| File::open(e.path()))
-                .map(|f| BufReader::new(f))
-                .map(|b| b.lines())
-                .unwrap())
+        .map(|res| res.unwrap())
+        .filter_map(|e| {
+            if e.path().extension() == Some(&OsString::from("log")) {
+                Some(e.path())
+            } else {
+                None
+            }
+        })
+        .map(|p| BufReader::new(File::open(p).unwrap()).lines())
         .flatten();
-
+        
     let lines: Box<dyn Iterator<Item = String>> =
         Box::new(entries.map(|l| l.unwrap()));
 
@@ -211,6 +216,7 @@ mod tests {
     use serde_json::json;
     use serde_json::Value;
     use std::collections::HashMap;
+    use std::ffi::OsString;
     use std::fs::read_dir;
     use std::fs::File;
     use std::io::prelude::*;
@@ -231,12 +237,17 @@ mod tests {
 
         let entries = read_dir("fixtures")
             .unwrap()
-            .map(|res| 
-                res.and_then(|e| File::open(e.path()))
-                    .map(|f| BufReader::new(f))
-                    .map(|b| b.lines())
-                    .unwrap())
+            .map(|res| res.unwrap())
+            .filter_map(|e| {
+                if e.path().extension() == Some(&OsString::from("log")) {
+                    Some(e.path())
+                } else {
+                    None
+                }
+            })
+            .map(|p| BufReader::new(File::open(p).unwrap()).lines())
             .flatten();
+
 
         let mut filtered = entries
             .map(|l| l.unwrap())
@@ -492,11 +503,15 @@ mod tests {
 
         let mut entries = read_dir("fixtures")
             .unwrap()
-            .map(|res| 
-                res.and_then(|e| File::open(e.path()))
-                    .map(|f| BufReader::new(f))
-                    .map(|b| b.lines())
-                    .unwrap())
+            .map(|res| res.unwrap())
+            .filter_map(|e| {
+                if e.path().extension() == Some(&OsString::from("log")) {
+                    Some(e.path())
+                } else {
+                    None
+                }
+            })
+            .map(|p| BufReader::new(File::open(p).unwrap()).lines())
             .flatten();
 
 
@@ -586,11 +601,15 @@ mod tests {
 
         let entries = read_dir("fixtures")
             .unwrap()
-            .map(|res| 
-                res.and_then(|e| File::open(e.path()))
-                    .map(|f| BufReader::new(f))
-                    .map(|b| b.lines())
-                    .unwrap())
+            .map(|res| res.unwrap())
+            .filter_map(|e| {
+                if e.path().extension() == Some(&OsString::from("log")) {
+                    Some(e.path())
+                } else {
+                    None
+                }
+            })
+            .map(|p| BufReader::new(File::open(p).unwrap()).lines())
             .flatten();
 
         let lines: Box<dyn Iterator<Item = String>> =
@@ -625,11 +644,15 @@ mod tests {
 
         let entries = read_dir("fixtures")
             .unwrap()
-            .map(|res| 
-                res.and_then(|e| File::open(e.path()))
-                    .map(|f| BufReader::new(f))
-                    .map(|b| b.lines())
-                    .unwrap())
+            .map(|res| res.unwrap())
+            .filter_map(|e| {
+                if e.path().extension() == Some(&OsString::from("log")) {
+                    Some(e.path())
+                } else {
+                    None
+                }
+            })
+            .map(|p| BufReader::new(File::open(p).unwrap()).lines())
             .flatten();
 
         let lines: Box<dyn Iterator<Item = String>> =
