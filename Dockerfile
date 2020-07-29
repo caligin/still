@@ -1,4 +1,4 @@
-FROM rust:1.44.1-slim-stretch AS build
+FROM rust:1.45.0-slim-stretch AS build
 WORKDIR /
 
 # need nightly for rocket
